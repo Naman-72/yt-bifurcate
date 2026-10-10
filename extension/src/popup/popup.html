@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Topic Filter</title>
+  <style>
+    :root { --bg:#14161a; --card:#1c1f25; --line:#2b303a; --fg:#e7eaf0; --dim:#9aa3b2; --accent:#6ea8fe; --bad:#f2837f; }
+    body { width: 260px; margin:0; padding:14px; background:var(--bg); color:var(--fg);
+           font:13px/1.5 "Segoe UI", system-ui, sans-serif; }
+    h1 { font-size:13px; margin:0 0 12px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); }
+    .toggle { display:flex; align-items:center; justify-content:space-between; gap:10px;
+              background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+    .stats { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px; color:var(--dim); }
+    .stats b { color:var(--fg); }
+    button { width:100%; padding:8px; margin-bottom:8px; border-radius:7px; border:1px solid var(--line);
+             background:#232833; color:var(--fg); font:inherit; cursor:pointer; }
+    button:hover { border-color:#3c4453; }
+    #warn { color:var(--bad); margin-top:4px; display:none; }
+  </style>
+</head>
+<body>
+  <h1>Topic Filter</h1>
+
+  <div class="toggle">
+    <span>Filtering</span>
+    <input type="checkbox" id="enabled">
+  </div>
+
+  <div class="stats" id="stats">loading…</div>
+  <div class="stats" id="diag">checking page…</div>
+  <div id="warn">No API key set — open settings.</div>
+
+  <button id="reveal">Reveal hidden videos</button>
+  <button id="options">Settings</button>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

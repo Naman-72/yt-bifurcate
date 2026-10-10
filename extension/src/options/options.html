@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Topic Filter for YouTube</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <div class="mark">TF</div>
+      <div>
+        <h1>Topic Filter</h1>
+        <p class="sub">Reads each video's metadata, asks JEV which of your topics it belongs to, and removes the matches.</p>
+      </div>
+    </div>
+    <div id="health" class="health">checking…</div>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="head"><span class="num">1</span><h2>OpenRouter key</h2></div>
+      <label class="field">
+        <span class="label">API key</span>
+        <div class="keyrow">
+          <input type="password" id="apiKey" placeholder="sk-or-v1-…" autocomplete="off" spellcheck="false">
+          <button id="test" class="btn">Test</button>
+        </div>
+      </label>
+      <p id="testStatus" class="status"></p>
+      <p class="note">
+        Stored in <code>chrome.storage.local</code> for this browser profile only. Not synced to your
+        Google account, never written into the extension source, and sent only to openrouter.ai.
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="head">
+        <span class="num">2</span><h2>Topics</h2>
+        <span class="hint">the description is the model's definition of the category</span>
+      </div>
+      <div id="topics"></div>
+      <button id="addTopic" class="btn ghost dashed">+ Add topic</button>
+    </section>
+
+    <section class="card">
+      <div class="head"><span class="num">3</span><h2>Thresholds</h2></div>
+
+      <div class="slider">
+        <div class="sliderTop">
+          <span class="label">Hide at or above</span>
+          <output id="thresholdOut" class="chip">0.55</output>
+        </div>
+        <input type="range" id="threshold" min="0.30" max="0.95" step="0.05">
+        <div class="scale"><span>0.30 · cautious</span><span>0.95 · certain only</span></div>
+      </div>
+
+      <div class="slider">
+        <div class="sliderTop">
+          <span class="label">Review band below that</span>
+          <output id="bandOut" class="chip warm">0.15</output>
+        </div>
+        <input type="range" id="reviewBand" min="0" max="0.35" step="0.05">
+        <div class="scale"><span>0 · no band</span><span>0.35 · wide band</span></div>
+      </div>
+
+      <p class="note">
+        Inside the review band a video is shown with a small badge instead of being hidden. A missed
+        hide is mildly annoying; a wrong hide is the failure you care about — so bias the threshold low.
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="head"><span class="num">4</span><h2>Where to run</h2></div>
+      <div class="switches">
+        <label class="switch"><input type="checkbox" id="s-home"><span class="track"></span><span class="switchLabel">Home feed</span></label>
+        <label class="switch"><input type="checkbox" id="s-watchSidebar"><span class="track"></span><span class="switchLabel">Watch-page sidebar</span></label>
+        <label class="switch"><input type="checkbox" id="s-search"><span class="track"></span><span class="switchLabel">Search results</span></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="head"><span class="num">5</span><h2>Metadata depth</h2></div>
+
+      <label class="switch wide">
+        <input type="checkbox" id="enrich">
+        <span class="track"></span>
+        <span class="switchLabel">
+          Fetch each video's page
+          <small>adds YouTube's own category label, keywords and description — about 1.4&nbsp;MB per video</small>
+        </span>
+      </label>
+
+      <p class="note">
+        If a fetch fails the card falls back to title + channel. Transcripts are not reachable this
+        way — YouTube requires a proof-of-origin token for captions.
+      </p>
+
+      <div class="grid">
+        <label class="field">
+          <span class="label">Description chars</span>
+          <input type="number" id="enrichChars" min="0" max="3000" step="100">
+        </label>
+        <label class="field">
+          <span class="label">Videos per request</span>
+          <input type="number" id="maxPerBatch" min="1" max="20" step="1">
+        </label>
+        <label class="field">
+          <span class="label">Parallel fetches</span>
+          <input type="number" id="concurrency" min="1" max="8" step="1">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="head">
+        <span class="num">6</span><h2>Instant blocklist</h2>
+        <span class="hint">optional · no API call</span>
+      </div>
+      <label class="field">
+        <span class="label">One phrase per line, matched against title and channel</span>
+        <textarea id="localKeywords" rows="3" placeholder="reacts to&#10;drama alert"></textarea>
+      </label>
+    </section>
+
+    <section class="card">
+      <div class="head">
+        <span class="num">7</span><h2>Activity</h2>
+        <span class="hint">live from your YouTube tab</span>
+      </div>
+      <div id="diag" class="tiles"><div>no activity recorded yet</div></div>
+      <div class="head sub-head"><h2>Totals</h2></div>
+      <div id="stats" class="tiles"></div>
+      <button id="clear" class="btn ghost">Clear cache and stats</button>
+    </section>
+  </main>
+
+  <footer class="savebar">
+    <button id="save" class="btn primary">Save changes</button>
+    <span id="saveStatus" class="status"></span>
+  </footer>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

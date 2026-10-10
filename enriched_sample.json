@@ -1,0 +1,18 @@
+[
+  {
+    "videoId": "aaaaaaaaaaa",
+    "error": "playability=ERROR"
+  },
+  {
+    "videoId": "bbbbbbbbbbb",
+    "error": "playability=ERROR"
+  },
+  {
+    "videoId": "ccccccccccc",
+    "error": "playability=ERROR"
+  },
+  {
+    "videoId": "ddddddddddd",
+    "error": "playability=ERROR"
+  }
+]

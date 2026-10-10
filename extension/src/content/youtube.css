@@ -1,0 +1,38 @@
+/* On-page status strip. Its presence proves the content script is injected, and its
+   version number proves WHICH build is running. */
+#tv-chip {
+  position: fixed;
+  left: 10px;
+  bottom: 10px;
+  z-index: 2147483647;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #7fd4a0;
+  font: 500 11px/1.5 "Roboto", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* Small marker for uncertain matches, so the review band is visible instead of silent. */
+.tv-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #ffd479;
+  font: 500 11px/1.5 "Roboto", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+ytd-rich-item-renderer,
+ytd-video-renderer,
+ytd-compact-video-renderer,
+ytd-grid-video-renderer {
+  position: relative;
+}
