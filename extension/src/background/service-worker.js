@@ -50,6 +50,37 @@ async function putCache(entries) {
   await chrome.storage.local.set({ verdictCache: cache });
 }
 
+// ---------------------------------------------------------------- enrichment throttle + breaker
+// Bulk watch-page fetches are indistinguishable from a scraper. So: fetch serially, keep a gap
+// between requests, and stop the whole lane for a cooldown the moment YouTube bounces us to its
+// captcha page. Without this, every card in the viewport fires a request at once and Google
+// starts serving /sorry/index to every one of them.
+
+const BLOCK_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+let lastEnrichAt = 0;
+let blockCache = { at: 0, until: 0 };
+
+async function getBlockedUntil() {
+  if (Date.now() - blockCache.at < 30000) return blockCache.until;
+  const { enrichBlockedUntil } = await chrome.storage.local.get('enrichBlockedUntil');
+  blockCache = { at: Date.now(), until: enrichBlockedUntil || 0 };
+  return blockCache.until;
+}
+
+async function tripBreaker(reason) {
+  const until = Date.now() + BLOCK_COOLDOWN_MS;
+  blockCache = { at: Date.now(), until };
+  await chrome.storage.local.set({ enrichBlockedUntil: until, enrichBlockedReason: reason });
+  await bumpStats({ enrichPaused: true, lastError: 'enrichment paused: ' + reason });
+}
+
+async function throttleEnrich() {
+  const gap = 900 + Math.random() * 500;
+  const wait = Math.max(0, lastEnrichAt + gap - Date.now());
+  lastEnrichAt = Date.now() + wait;
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+}
+
 // ---------------------------------------------------------------- enrichment
 // Verified working fields: title, author, channelId, lengthSeconds, viewCount,
 // keywords, category, publishDate, shortDescription.
@@ -74,9 +105,16 @@ function extractJsonObject(text, start) {
 }
 
 async function enrich(videoId, descChars) {
+  // redirect:'manual' surfaces YouTube's captcha bounce as a detectable opaqueredirect
+  // instead of an opaque CORS failure, so we can back off rather than retry it.
   const res = await fetch(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, {
-    credentials: 'omit'
+    credentials: 'omit',
+    redirect: 'manual'
   });
+  if (res.type === 'opaqueredirect' || res.status === 0) {
+    await tripBreaker('YouTube returned a captcha redirect');
+    throw new Error('blocked by YouTube (captcha redirect)');
+  }
   if (!res.ok) throw new Error(`watch page HTTP ${res.status}`);
   const html = await res.text();
 
@@ -118,8 +156,8 @@ async function callJev(payload, apiKey, attempts = 4) {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://localhost/youtube-topic-filter',
-          'X-Title': 'YouTube Topic Filter'
+          'HTTP-Referer': 'https://localhost/yt-improve',
+          'X-Title': 'YT-Improve'
         },
         body: JSON.stringify(payload)
       });
@@ -162,21 +200,20 @@ async function classifyItems(items, settings) {
     return results;
   }
 
-  // enrich in bounded parallel batches, degrading to title+channel on any failure
+  // Serialised, gapped, and interruptible. Off-screen cards and anything the breaker cuts off
+  // still get classified — just on the title and channel the listing already gave us.
   const enriched = [];
-  for (let i = 0; i < todo.length; i += settings.concurrency) {
-    const slice = todo.slice(i, i + settings.concurrency);
-    const done = await Promise.all(slice.map(async (it) => {
-      if (!settings.enrich) return { ...it };
-      try {
-        const meta = await enrich(it.videoId, settings.enrichChars);
-        return { ...it, ...meta, _enriched: true };
-      } catch (e) {
-        // keep going with what the feed card gave us
-        return { ...it, _enrichError: String(e.message || e) };
-      }
-    }));
-    enriched.push(...done);
+  for (const it of todo) {
+    const base = { ...it };
+    const skip = !settings.enrich || it.inView === false || Date.now() < (await getBlockedUntil());
+    if (skip) { enriched.push(base); continue; }
+    try {
+      await throttleEnrich();
+      const meta = await enrich(it.videoId, settings.enrichChars);
+      enriched.push({ ...base, ...meta, _enriched: true });
+    } catch (e) {
+      enriched.push({ ...base, _enrichError: String(e.message || e) });
+    }
   }
 
   // one request per batch: every question shares the same state
@@ -185,7 +222,7 @@ async function classifyItems(items, settings) {
     const chunk = enriched.slice(i, i + size);
     const payload = {
       model: settings.model || MODEL,
-      session_id: `ytfilter-${Date.now()}`,
+      session_id: `ytimprove-${Date.now()}`,
       state: { videos: chunk.map(strip) },
       questions: buildQuestions(chunk, settings.topics)
     };
@@ -221,7 +258,7 @@ async function classifyItems(items, settings) {
 
 // ---------------------------------------------------------------- messaging
 
-console.info('[TopicFilter] service worker started');
+console.info('[YT-Improve] service worker started');
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
@@ -234,22 +271,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'CLASSIFY': {
           const items = (msg.items || []).filter(x => x && x.videoId);
           if (!settings.enabled) {
-            console.info('[TopicFilter] filtering is switched off; ignoring', items.length, 'item(s)');
+            console.info('[YT-Improve] filtering is switched off; ignoring', items.length, 'item(s)');
             return sendResponse({ results: {} });
           }
-          console.info(`[TopicFilter] classifying ${items.length} video(s)`,
-                       { enrich: settings.enrich, batchSize: settings.maxPerBatch });
           const results = await classifyItems(items, settings);
-          console.info('[TopicFilter] decisions', results);
           await bumpStats({ scanned: items.length });
-          return sendResponse({ results });
+          const nHide = Object.values(results).filter(r => r.decision === 'hide').length;
+          console.info(`[YT-Improve] ${items.length} classified, ${nHide} to block`,
+                       settings.enrich ? '(metadata fetch on)' : '(title + channel only)');
+          const until = await getBlockedUntil();
+          return sendResponse({ results, enrichPausedUntil: until > Date.now() ? until : 0 });
         }
 
         case 'TEST': {
           const probe = { videoId: 'probe', title: 'Rick Astley - Never Gonna Give You Up (Official Video)', channel: 'Rick Astley' };
           const { data, error } = await callJev({
             model: settings.model || MODEL,
-            session_id: `ytfilter-test-${Date.now()}`,
+            session_id: `ytimprove-test-${Date.now()}`,
             state: { videos: [probe] },
             questions: buildQuestions([probe], settings.topics)
           }, settings.apiKey);
@@ -259,6 +297,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
         case 'GET_STATS':
           return sendResponse({ stats: await bumpStats({}) });
+
+        case 'CLEAR_BLOCK':
+          blockCache = { at: Date.now(), until: 0 };
+          await chrome.storage.local.remove(['enrichBlockedUntil', 'enrichBlockedReason']);
+          return sendResponse({ ok: true });
 
         case 'CLEAR_CACHE':
           await chrome.storage.local.set({ verdictCache: {} });

@@ -20,7 +20,7 @@
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 2;
+  z-index: 4;
   padding: 2px 7px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.72);
@@ -28,6 +28,96 @@
   font: 500 11px/1.5 "Roboto", "Segoe UI", system-ui, sans-serif;
   letter-spacing: 0.02em;
   pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- blocked cards
+   Veiled in place rather than removed. Two reasons: the feed never reflows, and YouTube's
+   virtualized list is never surgically edited, so there is nothing for it to render back. */
+
+.tv-blocked {
+  position: relative !important;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.tv-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(8, 10, 14, 0.5);
+  -webkit-backdrop-filter: blur(7px) saturate(0.35);
+  backdrop-filter: blur(7px) saturate(0.35);
+  animation: tv-veil-in 0.3s ease-out both;
+}
+
+/* one light sweep across the card as it darkens */
+.tv-veil::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(105deg, transparent 32%, rgba(255, 255, 255, 0.10) 50%, transparent 68%);
+  transform: translateX(-120%);
+  animation: tv-sweep 0.75s cubic-bezier(0.3, 0.7, 0.4, 1) 0.05s 1 both;
+}
+
+.tv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: rgba(14, 16, 20, 0.93);
+  border: 1px solid rgba(242, 117, 122, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font: 600 12px/1.4 "Roboto", "Segoe UI", system-ui, sans-serif;
+  animation: tv-pill-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.25) both;
+}
+
+.tv-tag {
+  color: #f2757a;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tv-why { color: #e8ecf3; font-weight: 500; }
+
+.tv-show {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cfd6e2;
+  font: 500 11px/1.4 "Roboto", system-ui, sans-serif;
+  cursor: pointer;
+  animation: tv-show-in 0.3s ease-out 0.28s both;
+}
+.tv-show:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+/* Compact sidebar cards have little height — keep the veil readable there. */
+ytd-compact-video-renderer .tv-veil { gap: 6px; }
+ytd-compact-video-renderer .tv-pill { padding: 4px 10px; font-size: 11px; }
+
+@keyframes tv-veil-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes tv-sweep { from { transform: translateX(-120%) } to { transform: translateX(120%) } }
+@keyframes tv-pill-in {
+  from { opacity: 0; transform: scale(0.86) translateY(6px) }
+  to   { opacity: 1; transform: scale(1) translateY(0) }
+}
+@keyframes tv-show-in {
+  from { opacity: 0; transform: translateY(4px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-veil, .tv-veil::before, .tv-pill, .tv-show { animation: none !important; }
 }
 
 ytd-rich-item-renderer,

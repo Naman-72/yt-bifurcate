@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Topic Filter for YouTube</title>
+  <title>YT-Improve</title>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <header class="top">
     <div class="brand">
-      <div class="mark">TF</div>
+      <div class="mark">YT</div>
       <div>
-        <h1>Topic Filter</h1>
+        <h1>YT-Improve</h1>
         <p class="sub">Reads each video's metadata, asks JEV which of your topics it belongs to, and removes the matches.</p>
       </div>
     </div>
@@ -93,9 +93,13 @@
       </label>
 
       <p class="note">
-        If a fetch fails the card falls back to title + channel. Transcripts are not reachable this
-        way — YouTube requires a proof-of-origin token for captions.
+        Off by default, and worth keeping that way unless you need it. One request per visible video
+        is enough for YouTube to decide you are a scraper and start redirecting these to its
+        <code>/sorry/index</code> captcha page. When that happens this lane pauses itself for 6 hours
+        and cards fall back to title + channel. Requests are serialised with a gap for the same
+        reason. Transcripts are not reachable this way at all — captions need a proof-of-origin token.
       </p>
+      <button id="resume" class="btn ghost">Resume metadata fetching now</button>
 
       <div class="grid">
         <label class="field">
@@ -105,10 +109,6 @@
         <label class="field">
           <span class="label">Videos per request</span>
           <input type="number" id="maxPerBatch" min="1" max="20" step="1">
-        </label>
-        <label class="field">
-          <span class="label">Parallel fetches</span>
-          <input type="number" id="concurrency" min="1" max="8" step="1">
         </label>
       </div>
     </section>

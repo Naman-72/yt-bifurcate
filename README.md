@@ -1,4 +1,4 @@
-# Topic Filter for YouTube (JEV)
+# YT-Improve
 
 Reads each video's metadata from your YouTube feed, sidebar and search results, asks
 [JEV](https://openrouter.ai/typesafe/jev-1.13) (a typed decision model, served through
@@ -40,7 +40,7 @@ directly, unpacked.
 3. Click **Load unpacked**
 4. Select the `extension/` folder — the one containing `manifest.json`
 
-It appears as **Topic Filter for YouTube (JEV)** with a puzzle-piece icon.
+It appears as **YT-Improve** with a puzzle-piece icon.
 No icons ship with it, so Chrome uses its default; that is expected.
 
 Then click the extension's **Details → Extension options** (or right-click the toolbar

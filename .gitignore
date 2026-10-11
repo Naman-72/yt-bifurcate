@@ -1,0 +1,25 @@
+# ------------------------------------------------------------------ secrets
+# Never commit these. The OpenRouter key lives in chrome.storage.local at runtime,
+# and .env is only ever a local scratch file for the M0 harness.
+.env
+.env.*
+*.key
+
+# Chrome Web Store packaging key + build artifacts.
+# Losing/leaking the private key means you can never update your own listing.
+*.pem
+*.crx
+*.zip
+
+# ------------------------------------------------------------------ generated caches
+.enrich_cache.json
+__pycache__/
+*.py[cod]
+
+# ------------------------------------------------------------------ tooling / OS
+node_modules/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -26,7 +26,8 @@
     'ytd-rich-grid-media, yt-lockup-view-model, ytd-playlist-video-renderer, yt-lockup-metadata-view-model';
 
   const seen = new Set();        // videoIds already sent for classification
-  const hidden = new Set();      // videoId -> decided hide
+  const hidden = new Map();      // videoId -> { topic, prob }
+  const revealed = new Set();    // videoIds the user chose to show anyway
   const reviewed = new Map();    // videoId -> topic
   let settings = null;
   let queue = [];
@@ -97,6 +98,13 @@
     return null;
   }
 
+  // Only cards you can actually see are worth a 1.4 MB metadata fetch.
+  function inViewport(el) {
+    const r = el.getBoundingClientRect();
+    const h = window.innerHeight || 900;
+    return r.bottom > -600 && r.top < h + 600;
+  }
+
   function keywordHit(info, kws) {
     if (!kws || !kws.length) return null;
     const hay = `${info.title} ${info.channel}`.toLowerCase();
@@ -106,12 +114,43 @@
 
   // ------------------------------------------------------------ actions
 
-  function removeCard(el, id, reason) {
-    el.style.display = 'none';
-    el.setAttribute('data-tv-hidden', reason || 'topic');
-    // YouTube's feed is virtualized and recycles renderers, so a plain .remove() leaks
-    // the card back on the next render. Keep the id and re-apply on every scan instead.
-    if (el.parentNode) el.remove();
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+
+  // Veil the card in place rather than deleting it: the feed keeps its layout, and because we
+  // never edit YouTube's list structure there is nothing for its virtualizer to re-render back.
+  function blockCard(el, id) {
+    if (el.querySelector(':scope > .tv-veil')) return;      // already veiled
+    const info = hidden.get(id) || { topic: 'keyword', prob: 0 };
+    const why = esc(info.topic) + (info.prob ? ' · ' + Math.round(info.prob * 100) + '%' : '');
+    el.classList.add('tv-blocked');
+    el.setAttribute('data-tv-hidden', info.topic || 'topic');
+
+    const veil = document.createElement('div');
+    veil.className = 'tv-veil';
+    veil.innerHTML =
+      '<div class="tv-pill"><span class="tv-tag">Blocked</span>' +
+      '<span class="tv-why">' + why + '</span></div>' +
+      '<button type="button" class="tv-show">Show anyway</button>';
+
+    veil.querySelector('.tv-show').addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      revealed.add(id);                                     // stays visible for this page load
+      unblockCard(el);
+      console.debug('[YT-Improve] showing', id, 'anyway');
+    });
+
+    el.appendChild(veil);
+  }
+
+  function unblockCard(el) {
+    el.classList.remove('tv-blocked');
+    el.removeAttribute('data-tv-hidden');
+    const v = el.querySelector(':scope > .tv-veil');
+    if (v) v.remove();
   }
 
   function applyReviewBadge(el, id) {
@@ -121,25 +160,23 @@
     const badge = document.createElement('div');
     badge.className = 'tv-badge';
     badge.textContent = `possibly ${topic}`;
-    badge.title = 'Topic Filter: uncertain match, not hidden';
+    badge.title = 'YT-Improve: uncertain match, not hidden';
     (el.querySelector('#dismissible') || el).prepend(badge);
   }
 
-  function markHidden(id, topic) {
+  function markHidden(id, topic, prob) {
     if (hidden.has(id)) return;
-    hidden.add(id);
-    console.info(`[TopicFilter] removed ${id} (${topic || 'keyword'})`);
+    hidden.set(id, { topic: topic || 'keyword', prob: prob || 0 });
+    console.debug(`[YT-Improve] blocked ${id} (${topic || 'keyword'})`);
     chrome.runtime.sendMessage({ type: 'RECORD_HIDDEN', n: 1 }).catch(() => {});
   }
 
   function revealAll() {
     hidden.clear();
     reviewed.clear();
+    revealed.clear();
     seen.clear();
-    document.querySelectorAll('[data-tv-hidden]').forEach(el => {
-      el.style.display = '';
-      el.removeAttribute('data-tv-hidden');
-    });
+    document.querySelectorAll('.tv-blocked').forEach(unblockCard);
     document.querySelectorAll('.tv-badge').forEach(b => b.remove());
     queue = [];
   }
@@ -207,7 +244,7 @@
     }
     const why = (extra && extra.reason) ? ` — ${extra.reason}` : '';
     chip.textContent =
-      `TopicFilter v${VERSION} · ${activeSurface() || 'other page'} · ` +
+      `YT-Improve v${VERSION} · ${activeSurface() || 'other page'} · ` +
       `${lastCardCount} cards · ${hidden.size} hidden${why}`;
   }
 
@@ -239,7 +276,7 @@
     if (!settings.surfaces[surf]) return reportDiag({ reason: `surface "${surf}" is unticked in options` });
     if (!settings.apiKey && !warnedNoKey) {
       warnedNoKey = true;
-      console.warn('[TopicFilter] no OpenRouter API key set — open the extension options');
+      console.warn('[YT-Improve] no OpenRouter API key set — open the extension options');
     }
 
     const kws = (settings.localKeywords || '')
@@ -251,9 +288,9 @@
       emptyScans = 0;
       if (!firstScanDone) {
         firstScanDone = true;
-        console.warn(`[TopicFilter] card discovery on ${surf}: ${cards.length} element(s) via ${mode}`);
+        console.info(`[YT-Improve] card discovery on ${surf}: ${cards.length} element(s) via ${mode}`);
         const sample = cards.slice(0, 3).map(explainCard);
-        console.warn('[TopicFilter] first cards look like:', sample);
+        console.info('[YT-Improve] first cards look like:', sample);
         reportDiag({ sample: JSON.stringify(sample) });
       }
     } else {
@@ -263,9 +300,9 @@
       if (emptyScans === 5 && !probeDone) {
         probeDone = true;
         const probe = domProbe();
-        console.warn(`[TopicFilter] no video cards after ${emptyScans} scans on ${surf}`);
-        console.warn('[TopicFilter] custom elements present in the DOM:', probe);
-        console.warn('[TopicFilter] CARD_SEL =', CARD_SEL);
+        console.warn(`[YT-Improve] no video cards after ${emptyScans} scans on ${surf}`);
+        console.warn('[YT-Improve] custom elements present in the DOM:', probe);
+        console.warn('[YT-Improve] CARD_SEL =', CARD_SEL);
         reportDiag({ reason: 'no video cards found — selectors may be stale', probe, mode });
       }
     }
@@ -276,25 +313,29 @@
       if (!info) continue;
 
       // already decided: re-apply, because the DOM may have re-rendered
-      if (hidden.has(info.videoId)) { removeCard(el, info.videoId); continue; }
+      if (revealed.has(info.videoId)) continue;             // user chose to keep this one visible
+      if (hidden.has(info.videoId)) { blockCard(el, info.videoId); continue; }
       if (reviewed.has(info.videoId)) { applyReviewBadge(el, info.videoId); continue; }
       if (seen.has(info.videoId)) continue;
 
       // free instant path: local keywords never touch the API
       const hit = keywordHit(info, kws);
       if (hit) {
-        markHidden(info.videoId, hit);
-        removeCard(el, info.videoId, 'keyword');
+        markHidden(info.videoId, hit, 0);
+        blockCard(el, info.videoId);
         continue;
       }
 
       seen.add(info.videoId);
       el.setAttribute('data-tv-id', info.videoId);
-      batch.push({ videoId: info.videoId, title: info.title, channel: info.channel });
+      batch.push({
+        videoId: info.videoId, title: info.title, channel: info.channel,
+        inView: inViewport(el)
+      });
     }
 
     if (batch.length) {
-      console.warn(`[TopicFilter] ${batch.length} new video(s) queued from ${surf}`);
+      console.info(`[YT-Improve] ${batch.length} new video(s) queued from ${surf}`);
       queue.push(...batch);
       scheduleFlush();
     }
@@ -310,7 +351,7 @@
     flushTimer = null;
     if (!queue.length || !settings || !settings.apiKey) {
       if (queue.length && settings && !settings.apiKey) {
-        console.warn(`[TopicFilter] dropping ${queue.length} video(s): no API key saved in options`);
+        console.warn(`[YT-Improve] dropping ${queue.length} video(s): no API key saved in options`);
       }
       queue = [];
       return;
@@ -321,17 +362,23 @@
     try {
       resp = await chrome.runtime.sendMessage({ type: 'CLASSIFY', items: batch });
     } catch (e) {
-      console.warn('[TopicFilter] classify failed', e);
+      console.warn('[YT-Improve] classify failed', e);
       return;
     }
     if (!resp || !resp.results) return;
+    if (resp.enrichPausedUntil) {
+      console.warn('[YT-Improve] YouTube blocked automated metadata fetches; enrichment paused until',
+                   new Date(resp.enrichPausedUntil).toLocaleTimeString(),
+                   '— classify on title + channel until then');
+      reportDiag({ reason: 'enrichment paused after a YouTube captcha redirect' });
+    }
 
     let nReview = 0;
     for (const [videoId, v] of Object.entries(resp.results)) {
-      if (v.error) { console.warn('[TopicFilter]', videoId, v.error); continue; }
+      if (v.error) { console.warn('[YT-Improve]', videoId, v.error); continue; }
       if (v.decision === 'hide') {
-        markHidden(videoId, v.topic);
-        document.querySelectorAll(`[data-tv-id="${videoId}"]`).forEach(el => removeCard(el, videoId));
+        markHidden(videoId, v.topic, v.prob);
+        document.querySelectorAll(`[data-tv-id="${videoId}"]`).forEach(el => blockCard(el, videoId));
       } else if (v.decision === 'review') {
         reviewed.set(videoId, v.topic);
         nReview++;
@@ -362,15 +409,15 @@
   });
 
   (async function start() {
-    console.warn('[TopicFilter] content script injected at', location.pathname);
+    console.info('[YT-Improve] content script injected at', location.pathname);
     try {
       const r = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
       settings = r.settings;
     } catch (e) {
-      console.error('[TopicFilter] could not reach the service worker — is the extension enabled?', e);
+      console.error('[YT-Improve] could not reach the service worker — is the extension enabled?', e);
       return;
     }
-    console.warn('[TopicFilter] settings', {
+    console.info('[YT-Improve] settings', {
       enabled: settings.enabled,
       hasKey: !!settings.apiKey,
       topics: (settings.topics || []).map(t => t.name),

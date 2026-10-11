@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Topic Filter for YouTube (JEV)",
-  "version": "0.3.0",
-  "description": "Reads each video's metadata, asks JEV which of your topics it belongs to, and removes the matches from your feed.",
+  "name": "YT-Improve",
+  "version": "0.5.1",
+  "description": "Reads each video's metadata, asks JEV which of your topics it belongs to, and veils the matches in your feed.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.youtube.com/*",
@@ -30,7 +30,7 @@
   },
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Topic Filter",
+    "default_title": "YT-Improve",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"

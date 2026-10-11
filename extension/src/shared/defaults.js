@@ -20,10 +20,9 @@ export const DEFAULT_SETTINGS = {
   threshold: 0.55,      // at or above -> hide
   reviewBand: 0.15,     // within this below the threshold -> badge, do not hide
   surfaces: { home: true, watchSidebar: true, search: true },
-  enrich: true,         // fetch each video's watch page for category/keywords/description
+  enrich: false,        // opt-in: bulk watch-page fetches are what trips YouTube's bot detection
   enrichChars: 600,     // description characters kept in state
   maxPerBatch: 8,       // videos per JEV request
-  concurrency: 3,       // parallel watch-page fetches
   localKeywords: ''     // one per line; matched against title+channel, hides instantly with no API call
 };
 

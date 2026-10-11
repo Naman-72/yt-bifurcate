@@ -40,7 +40,6 @@ async function load() {
   $('enrich').checked = !!s.enrich;
   $('enrichChars').value = s.enrichChars;
   $('maxPerBatch').value = s.maxPerBatch;
-  $('concurrency').value = s.concurrency;
   $('localKeywords').value = s.localKeywords || '';
 
   $('topics').innerHTML = '';
@@ -72,7 +71,6 @@ async function save() {
     enrich: $('enrich').checked,
     enrichChars: Number($('enrichChars').value) || 600,
     maxPerBatch: Number($('maxPerBatch').value) || 8,
-    concurrency: Number($('concurrency').value) || 3,
     localKeywords: $('localKeywords').value
   };
   await chrome.storage.local.set({ settings });
@@ -141,6 +139,13 @@ $('test').onclick = async () => {
     st.textContent = `failed — ${(r && r.error) || 'unknown error'}`;
     st.className = 'status bad';
   }
+};
+
+$('resume').onclick = async () => {
+  await chrome.runtime.sendMessage({ type: 'CLEAR_BLOCK' }).catch(() => {});
+  $('saveStatus').textContent = 'metadata fetching resumed';
+  $('saveStatus').className = 'status good';
+  setTimeout(() => { $('saveStatus').textContent = ''; }, 4000);
 };
 
 $('clear').onclick = async () => {
